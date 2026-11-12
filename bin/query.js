@@ -1,14 +1,16 @@
 #!/usr/bin/env node
-import * as profiler from '../src/profiler.js'
-import { REQUEST, FUNCTION_CODE } from '../src/sysex.js'
-import sleep from "../src/sleep.js"
+import { FNCODE, REQUESTS, parse } from "../src/sysex.js"
+import { open, close } from "../src/io.js"
+import { requester } from "../src/requester.js"
+
+const io = open("Profiler")
+const { query } = requester(io)
 
 const PAGE = 52
 const REGISTER = 0
 
-await profiler.open()
-
 let time = Date.now()
-const request = REQUEST[FUNCTION_CODE.RMPV](PAGE, REGISTER)
-const respone = await profiler.query(request)
-console.log("[response]", Date.now() - time, respone)
+const response = await query(REQUESTS[FNCODE.RRS](PAGE, REGISTER, 0))
+console.log("[response]", Date.now() - time, parse(response))
+
+close(io)

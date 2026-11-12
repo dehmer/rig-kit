@@ -1,4 +1,4 @@
-const EFFECT = [
+const EFFECT_LIST = [
     [  0, 'empty'],
     [  1, 'Wah Wah'],
     [  2, 'Wah Low Pass'],
@@ -97,4 +97,4 @@ const EFFECT = [
     [193, 'Spring Reverb']
 ]
 
-export const effects = Object.fromEntries(EFFECT)
+export const EFFECTS = Object.fromEntries(EFFECT_LIST)

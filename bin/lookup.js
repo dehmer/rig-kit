@@ -1,29 +1,29 @@
 #!/usr/bin/env node
-import * as profiler from '../src/profiler.js'
-import { REQUEST, FUNCTION_CODE } from '../src/sysex.js'
-import sleep from "../src/sleep.js"
+import { FNCODE, REQUESTS, parse } from "../src/sysex.js"
+import { open, close } from "../src/io.js"
+import { requester } from "../src/requester.js"
 
-const PAGE = 52
-const REGISTER = 20
+const PAGE = 0x3c
+const REGISTER = 0x47
 
-profiler.open()
+const io = open("Profiler")
+const { query } = requester(io)
+
 
 const loop  = async (v, max, inc) => {
-    const request = REQUEST[FUNCTION_CODE.RRS](PAGE, REGISTER, v)
-    console.log(Buffer.from(request))
-    const { value, string } = await profiler.query(request)
-    console.log(`  "${value}": "${string}",`)
-    await sleep(5)
-    if (v < max) loop(inc(v), max, inc)
+    const request = REQUESTS[FNCODE.RRS](PAGE, REGISTER, v)
+    const response = await query(request)
+    if (response.type !== "timeout") {
+        const { value, string } = parse(response)
+        console.log(`  "${value}": "${string}",`)
+    }
+
+    if (v < max) {
+        await loop(inc(v), max, inc)
+    }
 }
 
-// const loop  = async (register, max, inc) => {
-//     const request = REQUEST[FUNCTION_CODE.RRS](PAGE, register, 16383)
-//     const { value, string } = await profiler.query(request)
-//     console.log(register, `  "${value}": "${string}",`)
-//     await sleep(5)
-//     if (register < max) loop(inc(register), max, inc)
-// }
+await loop(0, 16383, v => v + 1)
+// await loop(0, 2, v => v + 1)
 
-await loop(0, 16383, v => v + 128)
-// await loop(0, 20, v => v + 1)
+close(io)
