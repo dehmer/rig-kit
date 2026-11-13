@@ -135,7 +135,7 @@ export const REQUESTS = {
         EOX
     ]),
 
-    [FNCODE.RSPV]: (page, register) => [
+    [FNCODE.RSPV]: (page, register) => Buffer.from([
         SYX,
         ...MANUFACTURER_ID,
         PRODUCT_TYPE,
@@ -145,7 +145,7 @@ export const REQUESTS = {
         page,
         register,
         EOX
-    ]
+    ])
 }
 
 
@@ -154,8 +154,8 @@ export const REQUESTS = {
  */
 const VALUES = {
     [FNCODE.SPC]: buffer => {
-        const msb = buffer.readInt8(0) & 0x7f
-        const lsb = buffer.readInt8(1) & 0x7f
+        const msb = buffer.readUInt8(0) & 0x7f
+        const lsb = buffer.readUInt8(1) & 0x7f
         return {
             value: (msb << 7) | lsb
         }
@@ -166,8 +166,8 @@ const VALUES = {
         const values = range(count)
             .map(x => x * 2)
             .map(offset => {
-                const msb = buffer.readInt8(offset) & 0x7f
-                const lsb = buffer.readInt8(offset + 1) & 0x7f
+                const msb = buffer.readUInt8(offset) & 0x7f
+                const lsb = buffer.readUInt8(offset + 1) & 0x7f
                 return (msb << 7) | lsb
             })
 
@@ -183,8 +183,8 @@ const VALUES = {
      * Reply to RRS (0x47).
      */
     0x3c: buffer => {
-        const msb = buffer.readInt8(0) & 0x7f
-        const lsb = buffer.readInt8(1) & 0x7f
+        const msb = buffer.readUInt8(0) & 0x7f
+        const lsb = buffer.readUInt8(1) & 0x7f
 
         return {
             value: (msb << 7) | lsb,
@@ -195,8 +195,8 @@ const VALUES = {
 
 
 export const parse = buffer => {
-    const syx = buffer.readInt8(0) & 0xff
-    const eox = buffer.readInt8(buffer.length - 1) & 0xff
+    const syx = buffer.readUInt8(0) & 0xff
+    const eox = buffer.readUInt8(buffer.length - 1) & 0xff
     if (syx !== SYX || eox !== EOX) return {}
 
     // Locate manufacturer ID:
@@ -206,14 +206,14 @@ export const parse = buffer => {
     // Skip product type and device ID and extract payload (message):
     const message = buffer.subarray(index + MANUFACTURER_ID.length + 2, buffer.length - 1)
 
-    const fncode = message.readInt8(0) & 0xff // function code
+    const fncode = message.readUInt8(0) & 0xff // function code
     const values = message.subarray(4)
     const reader = VALUES[fncode] || (() => ({ values }))
 
     return {
         fncode,
-        page: message.readInt8(2) & 0xff,
-        register: message.readInt8(3) & 0xff,
+        page: message.readUInt8(2) & 0xff,
+        register: message.readUInt8(3) & 0xff,
         ...reader(values)
     }
 }

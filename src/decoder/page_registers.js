@@ -49,7 +49,9 @@ export const REGISTERS = [
     [0x0b, 0x08, "Position", D.LOOKUP({0: "Post", 1: "Pre"})],
 ]
 
-
+/**
+ * Aggregate registers by parameter units.
+ */
 export const UNIT_REGISTERS = REGISTERS.reduce((acc, entry) => {
     const [page, register, ...rest] = entry
     const unit = unitAt(page, register)

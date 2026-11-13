@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { FNCODE, REQUESTS, parse } from "../src/sysex.js"
-import { open, close } from "../src/io.js"
+import { open, shutdown } from "../src/io.js"
 import { requester } from "../src/requester.js"
 
 const PAGE = 0x3c
@@ -26,4 +26,4 @@ const loop  = async (v, max, inc) => {
 await loop(0, 16383, v => v + 1)
 // await loop(0, 2, v => v + 1)
 
-close(io)
+await shutdown(io)

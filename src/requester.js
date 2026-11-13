@@ -4,29 +4,53 @@ import { send, listen } from "./io.js"
 const QUERY_TIMEOUT = 1500 // ms
 const REQUEST_DELAY = 20 // ms
 
+const Key = {
 
-const responseKey = buffer => {
-    const parts = parse(buffer)
-    const tokens =
-        RESPONSE_CODES[parts.fncode]
-            ? [RESPONSE_CODES[parts.fncode], parts.page, parts.register]
-            : [parts.fncode, parts.page, parts.register]
+    /**
+     * response :: Buffer -> string
+     */
+    response: buffer => {
+        const parts = parse(buffer)
+        const tokens =
+            RESPONSE_CODES[parts.fncode]
+                ? [RESPONSE_CODES[parts.fncode], parts.page, parts.register]
+                : [parts.fncode, parts.page, parts.register]
 
-    return tokens.join(":")
+        return tokens.join(":")
+    }
 }
 
+/**
+ * requester :: IO -> { query }
+ *
+ * Setup stateful query/response machinery.
+ */
 export const requester = io => {
+
+    /**
+     * pending :: { string: { resolvers, timer } }
+     */
     const pending = {}
+
+    /**
+     * queue :: [{ key, buffer }]
+     */
     const queue = []
+
+    /**
+     * inflight :: string
+     */
     let inflight = null
 
-    let now = Date.now()
+    // Dedicated listener to handle potential responses:
+    const responseHandler = buffer => response([Key.response(buffer), buffer])
+    const disposeListener = listen(io, responseHandler)
 
-    const disposeListener = listen(io, buffer => {
-        const key = responseKey(buffer)
-        response([key, buffer])
-    })
-
+    /**
+     * response :: [string, Buffer | { type: "timeout", key }] -> unit
+     *
+     * Handle response buffer or query timeout.
+     */
     const response = ([key, result]) => {
         const entry = pending[key]
         if (!entry) return // no matching query
@@ -35,7 +59,7 @@ export const requester = io => {
         delete pending[key]
         entry.resolvers.forEach(resolve => resolve(result))
 
-        // TODO: explain why this condition is needed
+        // Hardware Rate Limiting / Cooldown:
         if (key === inflight) {
             setTimeout(() => {
                 inflight = null
@@ -44,6 +68,11 @@ export const requester = io => {
         }
     }
 
+    /**
+     * process :: () -> unit
+     *
+     * Process next query from queue if any.
+     */
     const process = () => {
         if (inflight) return
 
@@ -53,27 +82,52 @@ export const requester = io => {
             if (!entry) continue // already resolved
 
             inflight = key
-            const onTimeout = () => {
-                response([key, { type: "timeout", key }])
-            }
+            const onTimeout = () => response([key, { type: "timeout", key }])
             entry.timer = setTimeout(onTimeout, QUERY_TIMEOUT)
             return send(io, buffer)
         }
     }
 
-    // Request/response.
+    /**
+     * query :: buffer -> Promise<Buffer | { type: "timeout" }>
+     *
+     * Schedule query and return async response.
+     */
     const query = buffer => new Promise(resolve => {
-        const key = responseKey(buffer)
+        const key = Key.response(buffer)
         const entry = pending[key]
 
-        // Coalesce: Add resolver to "same" previous request.
+        // Coalesce: Add resolver to matching previous request.
         if (entry) return entry.resolvers.push(resolve)
 
-        // Queue request and start processing queue:
+        // Queue query and start processing queue:
         pending[key] = { resolvers: [resolve] }
         queue.push({ key, buffer })
         process()
     })
+
+    /**
+     * Teardown logic: clear timers, resolve pending promises with shutdown status,
+     * and clean up the MIDI listener.
+     */
+    const dispose = () => {
+        disposeListener()
+
+        // Notify all pending/inflight queries that shutdown occurred
+        for (const key of Object.keys(pending)) {
+            const entry = pending[key]
+            clearTimeout(entry.timer)
+            entry.resolvers.forEach(resolve => resolve({ type: "shutdown", key }))
+        }
+
+        // Clear references
+        for (const key in pending) delete pending[key]
+        queue.length = 0
+        inflight = null
+    }
+
+    // Automatically tie requester lifecycle to IO disposables if present:
+    io.disposables.push(dispose)
 
     return { query }
 }
